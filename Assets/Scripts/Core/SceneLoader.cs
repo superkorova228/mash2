@@ -1,23 +1,25 @@
-using System;
-using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using mash2.Data;
+using System.Collections;
+using System;
 
-namespace mash2.Core
+namespace RhythmHell.Core
 {
+    /// <summary>
+    /// Менеджер загрузки сцен. Поддерживает асинхронную загрузку с экраном загрузки.
+    /// Singleton - доступен из любой точки игры.
+    /// </summary>
     public class SceneLoader : MonoBehaviour
     {
         public static SceneLoader Instance { get; private set; }
-        
-        [Header("Loading UI References")]
-        [SerializeField] private GameObject loadingScreen;
-        [SerializeField] private UnityEngine.UI.Slider progressBar;
-        [SerializeField] private TMPro.TextMeshProUGUI loadingText;
-        
-        public event Action<string> OnSceneLoadStarted;
-        public event Action<string> OnSceneLoadCompleted;
-        
+
+        [Header("Settings")]
+        [SerializeField] private float minimumLoadTime = 1f; // Минимальное время показа экрана загрузки
+
+        // События для обновления UI загрузки
+        public event Action<float> OnLoadProgress; // 0.0 - 1.0
+        public event Action OnLoadComplete;
+
         private bool isLoading = false;
 
         private void Awake()
@@ -27,181 +29,118 @@ namespace mash2.Core
                 Destroy(gameObject);
                 return;
             }
-            
+
             Instance = this;
             DontDestroyOnLoad(gameObject);
-            
-            if (loadingScreen != null)
-                loadingScreen.SetActive(false);
         }
 
-        public void LoadScene(SceneData sceneData)
-        {
-            if (sceneData == null)
-            {
-                Debug.LogError("SceneData is null!");
-                return;
-            }
-            
-            LoadSceneAsync(sceneData.sceneName, sceneData);
-        }
-        
+        /// <summary>
+        /// Загрузить сцену по имени
+        /// </summary>
         public void LoadScene(string sceneName)
         {
-            LoadSceneAsync(sceneName, null);
+            if (isLoading)
+            {
+                Debug.LogWarning("[SceneLoader] Already loading a scene!");
+                return;
+            }
+
+            StartCoroutine(LoadSceneAsync(sceneName));
         }
-        
+
+        /// <summary>
+        /// Загрузить сцену по индексу в Build Settings
+        /// </summary>
         public void LoadScene(int sceneIndex)
         {
-            LoadSceneAsync(sceneIndex, null);
-        }
-
-        private void LoadSceneAsync(string sceneName, SceneData sceneData)
-        {
             if (isLoading)
             {
-                Debug.LogWarning("Scene is already loading!");
+                Debug.LogWarning("[SceneLoader] Already loading a scene!");
                 return;
             }
-            
-            StartCoroutine(LoadSceneCoroutine(sceneName, sceneData));
-        }
-        
-        private void LoadSceneAsync(int sceneIndex, SceneData sceneData)
-        {
-            if (isLoading)
-            {
-                Debug.LogWarning("Scene is already loading!");
-                return;
-            }
-            
-            StartCoroutine(LoadSceneCoroutine(sceneIndex, sceneData));
+
+            StartCoroutine(LoadSceneAsync(sceneIndex));
         }
 
-        private IEnumerator LoadSceneCoroutine(string sceneName, SceneData sceneData)
+        /// <summary>
+        /// Быстрая загрузка без экрана загрузки (для меню)
+        /// </summary>
+        public void LoadSceneImmediate(string sceneName)
+        {
+            SceneManager.LoadScene(sceneName);
+        }
+
+        private IEnumerator LoadSceneAsync(string sceneName)
         {
             isLoading = true;
-            
-            bool showLoading = sceneData?.showLoadingScreen ?? true;
-            if (showLoading && loadingScreen != null)
-                loadingScreen.SetActive(true);
-            
-            OnSceneLoadStarted?.Invoke(sceneName);
-            
-            if (sceneData != null && sceneData.fadeOutMusic)
+            float startTime = Time.time;
+
+            Debug.Log($"[SceneLoader] Loading scene: {sceneName}");
+
+            // Меняем состояние игры
+            if (GameManager.Instance != null)
             {
-                // TODO: AudioManager fade
+                GameManager.Instance.ChangeGameState(GameState.Loading);
             }
-            
-            yield return new WaitForSeconds(0.1f);
-            
+
+            // ИСПРАВЛЕНИЕ: Загружаем LoadingScreen только если мы НЕ в LoadingScreen и целевая сцена НЕ LoadingScreen
+            string currentScene = SceneManager.GetActiveScene().name;
+            bool needLoadingScreen = (currentScene != "LoadingScreen" && sceneName != "LoadingScreen" && sceneName != "MainMenu");
+
+            if (needLoadingScreen)
+            {
+                SceneManager.LoadScene("LoadingScreen");
+                yield return new WaitForSeconds(0.1f);
+            }
+
+            // Начинаем асинхронную загрузку целевой сцены
             AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneName);
             asyncLoad.allowSceneActivation = false;
-            
-            float minimumTime = sceneData?.minimumLoadTime ?? 0.5f;
-            float timer = 0f;
-            
+
+            // Ждём загрузки
             while (!asyncLoad.isDone)
             {
-                timer += Time.deltaTime;
                 float progress = Mathf.Clamp01(asyncLoad.progress / 0.9f);
-                
-                if (progressBar != null)
-                    progressBar.value = progress;
-                
-                if (loadingText != null)
-                    loadingText.text = $"Loading... {Mathf.RoundToInt(progress * 100)}%";
-                
-                if (asyncLoad.progress >= 0.9f && timer >= minimumTime)
+                OnLoadProgress?.Invoke(progress);
+
+                if (asyncLoad.progress >= 0.9f)
                 {
-                    if (progressBar != null)
-                        progressBar.value = 1f;
-                    if (loadingText != null)
-                        loadingText.text = "Loading... 100%";
-                    
-                    yield return new WaitForSeconds(0.2f);
+                    // Только если показывали экран загрузки
+                    if (needLoadingScreen)
+                    {
+                        float elapsedTime = Time.time - startTime;
+                        if (elapsedTime < minimumLoadTime)
+                        {
+                            yield return new WaitForSeconds(minimumLoadTime - elapsedTime);
+                        }
+                    }
+
+                    OnLoadProgress?.Invoke(1f);
                     asyncLoad.allowSceneActivation = true;
                 }
-                
+
                 yield return null;
             }
-            
-            if (showLoading && loadingScreen != null)
-                loadingScreen.SetActive(false);
-            
-            OnSceneLoadCompleted?.Invoke(sceneName);
-            
+
+            OnLoadComplete?.Invoke();
             isLoading = false;
+
+            Debug.Log($"[SceneLoader] Scene loaded: {sceneName}");
         }
-        
-        private IEnumerator LoadSceneCoroutine(int sceneIndex, SceneData sceneData)
+
+        private IEnumerator LoadSceneAsync(int sceneIndex)
         {
-            isLoading = true;
-            
-            bool showLoading = sceneData?.showLoadingScreen ?? true;
-            if (showLoading && loadingScreen != null)
-                loadingScreen.SetActive(true);
-            
-            OnSceneLoadStarted?.Invoke($"Scene {sceneIndex}");
-            
-            if (sceneData != null && sceneData.fadeOutMusic)
-            {
-                // TODO: AudioManager fade
-            }
-            
-            yield return new WaitForSeconds(0.1f);
-            
-            AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneIndex);
-            asyncLoad.allowSceneActivation = false;
-            
-            float minimumTime = sceneData?.minimumLoadTime ?? 0.5f;
-            float timer = 0f;
-            
-            while (!asyncLoad.isDone)
-            {
-                timer += Time.deltaTime;
-                float progress = Mathf.Clamp01(asyncLoad.progress / 0.9f);
-                
-                if (progressBar != null)
-                    progressBar.value = progress;
-                if (loadingText != null)
-                    loadingText.text = $"Loading... {Mathf.RoundToInt(progress * 100)}%";
-                
-                if (asyncLoad.progress >= 0.9f && timer >= minimumTime)
-                {
-                    if (progressBar != null)
-                        progressBar.value = 1f;
-                    if (loadingText != null)
-                        loadingText.text = "Loading... 100%";
-                    
-                    yield return new WaitForSeconds(0.2f);
-                    asyncLoad.allowSceneActivation = true;
-                }
-                
-                yield return null;
-            }
-            
-            if (showLoading && loadingScreen != null)
-                loadingScreen.SetActive(false);
-            
-            OnSceneLoadCompleted?.Invoke($"Scene {sceneIndex}");
-            
-            isLoading = false;
+            string sceneName = SceneManager.GetSceneByBuildIndex(sceneIndex).name;
+            yield return LoadSceneAsync(sceneName);
         }
-        
+
+        /// <summary>
+        /// Перезагрузить текущую сцену
+        /// </summary>
         public void ReloadCurrentScene()
         {
-            Scene currentScene = SceneManager.GetActiveScene();
-            LoadScene(currentScene.name);
-        }
-        
-        public void QuitGame()
-        {
-            #if UNITY_EDITOR
-                UnityEditor.EditorApplication.isPlaying = false;
-            #else
-                Application.Quit();
-            #endif
+            string currentScene = SceneManager.GetActiveScene().name;
+            LoadScene(currentScene);
         }
     }
 }

@@ -1,97 +1,66 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using mash2.Core;
 
-namespace mash2.UI
+namespace RhythmHell.UI
 {
-    public class GameOverUI : MonoBehaviour
+    /// <summary>
+    /// Управление UI экрана Game Over
+    /// </summary>
+    public class GameOverPanelUI : MonoBehaviour
     {
-        [Header("Stats Display")]
-        [SerializeField] private TextMeshProUGUI scoreText;
-        [SerializeField] private TextMeshProUGUI timeText;
-        [SerializeField] private TextMeshProUGUI waveText;
-
-        [Header("Buttons")]
+        [Header("UI References")]
+        [SerializeField] private TextMeshProUGUI finalScoreText;
         [SerializeField] private Button restartButton;
         [SerializeField] private Button mainMenuButton;
 
-        private void Start()
+        private void OnEnable()
         {
+            // Обновляем финальный счёт
+            UpdateFinalScore();
+
+            // Подписываемся на кнопки
             if (restartButton != null)
                 restartButton.onClick.AddListener(OnRestartClicked);
-            
+
             if (mainMenuButton != null)
                 mainMenuButton.onClick.AddListener(OnMainMenuClicked);
-
-            DisplayStats();
-            
-            if (restartButton != null)
-                restartButton.Select();
         }
 
-        private void OnDestroy()
+        private void OnDisable()
         {
+            // Отписываемся
             if (restartButton != null)
                 restartButton.onClick.RemoveListener(OnRestartClicked);
+
             if (mainMenuButton != null)
                 mainMenuButton.onClick.RemoveListener(OnMainMenuClicked);
         }
 
-        private void DisplayStats()
+        private void UpdateFinalScore()
         {
-            if (GameManager.Instance == null)
+            if (finalScoreText != null && Core.GameManager.Instance != null)
             {
-                Debug.LogWarning("GameManager not found! Cannot display stats.");
-                return;
-            }
-
-            if (scoreText != null)
-            {
-                int score = GameManager.Instance.CurrentScore;
-                scoreText.text = $"Score: {score}";
-            }
-
-            if (timeText != null)
-            {
-                float time = GameManager.Instance.GameplayTime;
-                int minutes = Mathf.FloorToInt(time / 60f);
-                int seconds = Mathf.FloorToInt(time % 60f);
-                timeText.text = $"Time: {minutes}:{seconds:00}";
-            }
-
-            if (waveText != null)
-            {
-                int wave = GameManager.Instance.CurrentWave;
-                waveText.text = $"Wave: {wave}";
+                int score = Core.GameManager.Instance.Score;
+                finalScoreText.text = $"FINAL SCORE: {score}";
             }
         }
 
         private void OnRestartClicked()
         {
-            Debug.Log("Restart button clicked - Loading Gameplay scene");
-            
-            if (GameManager.Instance != null)
+            var gameplay = Gameplay.GameplayManager.Instance;
+            if (gameplay != null)
             {
-                GameManager.Instance.RestartGameplay();
-            }
-            else if (SceneLoader.Instance != null)
-            {
-                SceneLoader.Instance.LoadScene(3); // Gameplay
+                gameplay.RestartGame();
             }
         }
 
         private void OnMainMenuClicked()
         {
-            Debug.Log("Main Menu button clicked from Game Over");
-            
-            if (GameManager.Instance != null)
+            var gameplay = Gameplay.GameplayManager.Instance;
+            if (gameplay != null)
             {
-                GameManager.Instance.LoadMainMenu();
-            }
-            else if (SceneLoader.Instance != null)
-            {
-                SceneLoader.Instance.LoadScene(1); // MainMenu
+                gameplay.ReturnToMainMenu();
             }
         }
     }

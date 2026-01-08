@@ -1,146 +1,141 @@
 using UnityEngine;
 using UnityEngine.UI;
-using mash2.Core;
 
-namespace mash2.UI
+namespace RhythmHell.UI
 {
+    /// <summary>
+    /// Управление главным меню. Обрабатывает клики по кнопкам.
+    /// </summary>
     public class MainMenuUI : MonoBehaviour
     {
-        [Header("Buttons")]
+        [Header("UI References")]
         [SerializeField] private Button playButton;
         [SerializeField] private Button settingsButton;
         [SerializeField] private Button creditsButton;
-        [SerializeField] private Button quitButton;
+        [SerializeField] private Button exitButton;
+
+        [Header("Panels")]
+        [SerializeField] private GameObject mainMenuPanel;
+        [SerializeField] private GameObject settingsPanel; // Создадим позже
 
         private void Start()
         {
-            // Подписываемся на клики
+            // Устанавливаем состояние игры
+            if (Core.GameManager.Instance != null)
+            {
+                Core.GameManager.Instance.ChangeGameState(Core.GameState.MainMenu);
+            }
+
+            // Подписываемся на клики кнопок
             if (playButton != null)
                 playButton.onClick.AddListener(OnPlayClicked);
-            
+
             if (settingsButton != null)
                 settingsButton.onClick.AddListener(OnSettingsClicked);
-            
+
             if (creditsButton != null)
                 creditsButton.onClick.AddListener(OnCreditsClicked);
-            
-            if (quitButton != null)
-                quitButton.onClick.AddListener(OnQuitClicked);
-            
-            // БЕЗОПАСНАЯ подписка на события GameManager
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.OnStateChanged += OnGameStateChanged;
-            }
-            else
-            {
-                Debug.LogWarning("GameManager.Instance is null in MainMenuUI.Start()");
-            }
+
+            if (exitButton != null)
+                exitButton.onClick.AddListener(OnExitClicked);
+
+            // Показываем главное меню, скрываем остальное
+            ShowMainMenu();
         }
 
         private void OnDestroy()
         {
-            // Отписываемся от кнопок
+            // Отписываемся от событий при уничтожении
             if (playButton != null)
                 playButton.onClick.RemoveListener(OnPlayClicked);
+
             if (settingsButton != null)
                 settingsButton.onClick.RemoveListener(OnSettingsClicked);
+
             if (creditsButton != null)
                 creditsButton.onClick.RemoveListener(OnCreditsClicked);
-            if (quitButton != null)
-                quitButton.onClick.RemoveListener(OnQuitClicked);
-            
-            // БЕЗОПАСНАЯ отписка от событий
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.OnStateChanged -= OnGameStateChanged;
-            }
+
+            if (exitButton != null)
+                exitButton.onClick.RemoveListener(OnExitClicked);
         }
 
-        // Обработчики кликов с проверкой на null
+        /// <summary>
+        /// Кнопка PLAY - загрузить Gameplay
+        /// </summary>
         private void OnPlayClicked()
         {
-            Debug.Log("Play button clicked!");
+            Debug.Log("[MainMenu] Play clicked");
             
-            // Проверяем, существует ли GameManager
-            if (GameManager.Instance != null)
+            if (Core.SceneLoader.Instance != null)
             {
-                GameManager.Instance.LoadGameplay();
-            }
-            else
-            {
-                // Fallback - загружаем напрямую через SceneLoader
-                Debug.LogWarning("GameManager not found! Using SceneLoader directly.");
-                if (SceneLoader.Instance != null)
+                // Сбрасываем данные игры перед началом
+                if (Core.GameManager.Instance != null)
                 {
-                    SceneLoader.Instance.LoadScene(3); // Gameplay
+                    Core.GameManager.Instance.ResetGameData();
                 }
-                else
-                {
-                    Debug.LogError("SceneLoader is also null! Cannot load scene.");
-                }
+
+                Core.SceneLoader.Instance.LoadScene("Gameplay");
             }
         }
 
+        /// <summary>
+        /// Кнопка SETTINGS - открыть панель настроек
+        /// </summary>
         private void OnSettingsClicked()
         {
-            Debug.Log("Settings button clicked!");
-            
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.LoadSettings();
-            }
-            else
-            {
-                Debug.LogWarning("GameManager not found! Using SceneLoader directly.");
-                if (SceneLoader.Instance != null)
-                {
-                    SceneLoader.Instance.LoadScene(2); // Settings
-                }
-            }
+            Debug.Log("[MainMenu] Settings clicked");
+            ShowSettings();
         }
 
+        /// <summary>
+        /// Кнопка CREDITS - загрузить сцену титров
+        /// </summary>
         private void OnCreditsClicked()
         {
-            Debug.Log("Credits button clicked!");
+            Debug.Log("[MainMenu] Credits clicked");
             
-            if (SceneLoader.Instance != null)
+            if (Core.SceneLoader.Instance != null)
             {
-                SceneLoader.Instance.LoadScene(6); // Credits
-            }
-            else
-            {
-                Debug.LogError("SceneLoader is null!");
+                Core.SceneLoader.Instance.LoadSceneImmediate("Credits");
             }
         }
 
-        private void OnQuitClicked()
+        /// <summary>
+        /// Кнопка EXIT - выход из игры
+        /// </summary>
+        private void OnExitClicked()
         {
-            Debug.Log("Quit button clicked!");
-            
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.QuitGame();
-            }
-            else if (SceneLoader.Instance != null)
-            {
-                SceneLoader.Instance.QuitGame();
-            }
-            else
-            {
-                // Последний вариант - выход напрямую
-                #if UNITY_EDITOR
-                    UnityEditor.EditorApplication.isPlaying = false;
-                #else
-                    Application.Quit();
-                #endif
-            }
+            Debug.Log("[MainMenu] Exit clicked");
+
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
-        // Реагируем на изменение состояния игры
-        private void OnGameStateChanged(GameState oldState, GameState newState)
+        /// <summary>
+        /// Показать главное меню
+        /// </summary>
+        public void ShowMainMenu()
         {
-            Debug.Log($"MainMenu noticed state change: {oldState} → {newState}");
+            if (mainMenuPanel != null)
+                mainMenuPanel.SetActive(true);
+
+            if (settingsPanel != null)
+                settingsPanel.SetActive(false);
+        }
+
+        /// <summary>
+        /// Показать настройки
+        /// </summary>
+        public void ShowSettings()
+        {
+            if (mainMenuPanel != null)
+                mainMenuPanel.SetActive(false);
+
+            if (settingsPanel != null)
+                settingsPanel.SetActive(true);
         }
     }
 }

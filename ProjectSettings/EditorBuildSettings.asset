@@ -9,26 +9,20 @@ EditorBuildSettings:
     path: Assets/Scenes/SampleScene.unity
     guid: 8c9cfa26abfee488c85f1582747f6a02
   - enabled: 1
-    path: Assets/Scenes/Boot.unity
-    guid: af5e1cca2e96dc945a6a3afc1813cac0
+    path: Assets/Scenes/Bootstrapper.unity
+    guid: d992f030705dc3a468e7910390e44e24
   - enabled: 1
     path: Assets/Scenes/MainMenu.unity
-    guid: 181e0d5e2670e2c4b968888ef827d95f
-  - enabled: 1
-    path: Assets/Scenes/Settings.unity
-    guid: 6a3a86d6d63922a439a7b246564bd049
+    guid: 8da00063cee92ad46926ffb58450824c
   - enabled: 1
     path: Assets/Scenes/Gameplay.unity
-    guid: 68d101531d5d5d4408a3110067f6f294
-  - enabled: 1
-    path: Assets/Scenes/Pause.unity
-    guid: d351461e2ae18ad4ead6777748ea9f7c
-  - enabled: 1
-    path: Assets/Scenes/GameOver.unity
-    guid: 27eed7eb92977494d81cd56936856033
+    guid: c93194ee9bd2bd94eb799e7c30bab853
   - enabled: 1
     path: Assets/Scenes/Credits.unity
-    guid: e8aed7bd0cb6f4944b4ef22b3baa88a6
+    guid: 0c6dcf9e1b0063d45b367a6013ebc7ac
+  - enabled: 1
+    path: Assets/Scenes/LoadingScreen.unity
+    guid: af043b56b8ac5e946a5aae9138cb16ef
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0

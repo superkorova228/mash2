@@ -1,310 +1,156 @@
-using System;
 using UnityEngine;
-using UnityEngine.SceneManagement;
+using System;
 
-namespace mash2.Core
+namespace RhythmHell.Core
 {
     /// <summary>
-    /// Главный менеджер игры. Управляет состояниями, паузой, игровыми данными.
-    /// Singleton - существует во всех сценах.
+    /// Состояния игры
+    /// </summary>
+    public enum GameState
+    {
+        MainMenu,    // Главное меню
+        Playing,     // Игровой процесс
+        Paused,      // Пауза
+        GameOver,    // Конец игры
+        Loading      // Загрузка
+    }
+
+    /// <summary>
+    /// Главный менеджер игры. Управляет состояниями и глобальными данными.
+    /// Singleton - существует в единственном экземпляре и не уничтожается между сценами.
     /// </summary>
     public class GameManager : MonoBehaviour
     {
-        // Singleton
+        // Singleton паттерн
         public static GameManager Instance { get; private set; }
-        
+
         [Header("Game State")]
-        [SerializeField] private GameState currentState = GameState.Boot;
-        
-        // Публичное свойство для доступа к текущему состоянию (только чтение)
-        public GameState CurrentState => currentState;
-        
-        // События для подписки других систем
-        public event Action<GameState, GameState> OnStateChanged; // (предыдущее, новое)
-        public event Action OnGamePaused;
-        public event Action OnGameResumed;
-        
-        [Header("Gameplay Data")]
+        [SerializeField] private GameState currentState = GameState.MainMenu;
+
+        [Header("Player Stats")]
         [SerializeField] private int currentScore = 0;
-        [SerializeField] private int currentWave = 0;
-        [SerializeField] private float gameplayTime = 0f;
-        
-        // Публичные свойства для доступа к данным
-        public int CurrentScore => currentScore;
-        public int CurrentWave => currentWave;
-        public float GameplayTime => gameplayTime;
-        
-        // Флаг паузы
-        private bool isPaused = false;
-        public bool IsPaused => isPaused;
+        [SerializeField] private int collectedSouls = 0; // Валюта для казино
+        [SerializeField] private int currentCircle = 1; // Текущий круг ада (1-9)
+
+        // События для подписки других систем
+        public event Action<GameState> OnGameStateChanged;
+        public event Action<int> OnScoreChanged;
+        public event Action<int> OnSoulsChanged;
+
+        // Публичные свойства (только для чтения)
+        public GameState CurrentState => currentState;
+        public int Score => currentScore;
+        public int Souls => collectedSouls;
+        public int CurrentCircle => currentCircle;
 
         private void Awake()
         {
-            // Singleton pattern
+            // Реализация Singleton
             if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
-            
+
             Instance = this;
-            DontDestroyOnLoad(gameObject);
+            DontDestroyOnLoad(gameObject); // Не уничтожать при загрузке новых сцен
             
-            Debug.Log("GameManager initialized.");
-        }
-
-        private void Start()
-        {
-            // Подписываемся на события смены сцены
-            SceneManager.sceneLoaded += OnSceneLoaded;
-        }
-
-        private void OnDestroy()
-        {
-            // Отписываемся от событий
-            SceneManager.sceneLoaded -= OnSceneLoaded;
-        }
-
-        private void Update()
-        {
-            // Обновляем время геймплея только во время игры
-            if (currentState == GameState.Gameplay && !isPaused)
-            {
-                gameplayTime += Time.deltaTime;
-            }
-            
-            // Горячая клавиша для паузы (ESC)
-            if (currentState == GameState.Gameplay && Input.GetKeyDown(KeyCode.Escape))
-            {
-                if (isPaused)
-                    ResumeGame();
-                else
-                    PauseGame();
-            }
+            Debug.Log("[GameManager] Initialized");
         }
 
         /// <summary>
-        /// Изменяет состояние игры
+        /// Изменить состояние игры
         /// </summary>
-        public void ChangeState(GameState newState)
+        public void ChangeGameState(GameState newState)
         {
-            if (currentState == newState)
-                return; // Уже в этом состоянии
+            if (currentState == newState) return;
+
+            Debug.Log($"[GameManager] State changed: {currentState} -> {newState}");
             
-            GameState previousState = currentState;
             currentState = newState;
-            
-            Debug.Log($"Game State changed: {previousState} → {newState}");
-            
-            // Уведомляем подписчиков
-            OnStateChanged?.Invoke(previousState, newState);
-            
-            // Выполняем действия в зависимости от нового состояния
+            OnGameStateChanged?.Invoke(newState);
+
+            // Обработка смены состояния
             HandleStateChange(newState);
         }
 
-        /// <summary>
-        /// Обработка входа в новое состояние
-        /// </summary>
-        private void HandleStateChange(GameState newState)
+        private void HandleStateChange(GameState state)
         {
-            switch (newState)
+            switch (state)
             {
-                case GameState.Boot:
-                    // Инициализация
+                case GameState.Playing:
+                    Time.timeScale = 1f; // Нормальная скорость
+                    Cursor.visible = false; // Скрываем курсор
                     break;
-                
-                case GameState.MainMenu:
-                    // Сброс данных геймплея
-                    ResetGameplayData();
-                    Time.timeScale = 1f; // Убедимся, что время идёт нормально
-                    isPaused = false;
-                    break;
-                
-                case GameState.Gameplay:
-                    // Начало новой игры
-                    Time.timeScale = 1f;
-                    isPaused = false;
-                    break;
-                
+
                 case GameState.Paused:
-                    // Пауза обрабатывается через PauseGame()
+                    Time.timeScale = 0f; // Останавливаем время
+                    Cursor.visible = true; // Показываем курсор
                     break;
-                
+
                 case GameState.GameOver:
-                    Time.timeScale = 1f; // На экране Game Over время идёт нормально
-                    isPaused = false;
-                    // Здесь можно сохранить рекорды, показать статистику
+                    Time.timeScale = 0f;
+                    Cursor.visible = true;
                     break;
-                
-                case GameState.Settings:
-                case GameState.Credits:
-                    // Ничего особенного
-                    break;
-                
-                case GameState.Loading:
-                    // Идёт загрузка
+
+                case GameState.MainMenu:
+                    Time.timeScale = 1f;
+                    Cursor.visible = true;
                     break;
             }
         }
 
         /// <summary>
-        /// Вызывается когда загружается новая сцена
+        /// Добавить очки
         /// </summary>
-        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        public void AddScore(int amount)
         {
-            Debug.Log($"Scene loaded: {scene.name}");
-            
-            // Автоматически меняем состояние в зависимости от сцены
-            switch (scene.name)
+            currentScore += amount;
+            OnScoreChanged?.Invoke(currentScore);
+        }
+
+        /// <summary>
+        /// Добавить души (валюту)
+        /// </summary>
+        public void AddSouls(int amount)
+        {
+            collectedSouls += amount;
+            OnSoulsChanged?.Invoke(collectedSouls);
+        }
+
+        /// <summary>
+        /// Потратить души
+        /// </summary>
+        public bool SpendSouls(int amount)
+        {
+            if (collectedSouls >= amount)
             {
-                case "Boot":
-                    ChangeState(GameState.Boot);
-                    break;
-                case "MainMenu":
-                    ChangeState(GameState.MainMenu);
-                    break;
-                case "Settings":
-                    ChangeState(GameState.Settings);
-                    break;
-                case "Gameplay":
-                    ChangeState(GameState.Gameplay);
-                    break;
-                case "Pause":
-                    ChangeState(GameState.Paused);
-                    break;
-                case "GameOver":
-                    ChangeState(GameState.GameOver);
-                    break;
-                case "Credits":
-                    ChangeState(GameState.Credits);
-                    break;
+                collectedSouls -= amount;
+                OnSoulsChanged?.Invoke(collectedSouls);
+                return true;
             }
-        }
-
-        // ============================================
-        // ПАУЗА
-        // ============================================
-        
-        /// <summary>
-        /// Ставит игру на паузу
-        /// </summary>
-        public void PauseGame()
-        {
-            if (currentState != GameState.Gameplay)
-            {
-                Debug.LogWarning("Cannot pause - not in gameplay!");
-                return;
-            }
-            
-            if (isPaused)
-                return; // Уже на паузе
-            
-            isPaused = true;
-            Time.timeScale = 0f; // Останавливаем время
-            
-            Debug.Log("Game PAUSED");
-            OnGamePaused?.Invoke();
-            
-            // Можно загрузить Pause сцену как overlay (дополнительная сцена поверх текущей)
-            // Или показать UI паузы
+            return false;
         }
 
         /// <summary>
-        /// Снимает игру с паузы
+        /// Сбросить данные для новой игры
         /// </summary>
-        public void ResumeGame()
-        {
-            if (!isPaused)
-                return;
-            
-            isPaused = false;
-            Time.timeScale = 1f; // Возобновляем время
-            
-            Debug.Log("Game RESUMED");
-            OnGameResumed?.Invoke();
-        }
-
-        // ============================================
-        // GAMEPLAY DATA
-        // ============================================
-        
-        /// <summary>
-        /// Добавляет очки к счёту
-        /// </summary>
-        public void AddScore(int points)
-        {
-            currentScore += points;
-            Debug.Log($"Score: {currentScore} (+{points})");
-        }
-
-        /// <summary>
-        /// Переход на следующую волну врагов
-        /// </summary>
-        public void NextWave()
-        {
-            currentWave++;
-            Debug.Log($"Wave {currentWave} started!");
-        }
-
-        /// <summary>
-        /// Сброс данных геймплея (при возврате в меню или начале новой игры)
-        /// </summary>
-        public void ResetGameplayData()
+        public void ResetGameData()
         {
             currentScore = 0;
-            currentWave = 0;
-            gameplayTime = 0f;
-            Debug.Log("Gameplay data reset.");
+            currentCircle = 1;
+            // Души НЕ сбрасываем - они копятся между попытками для казино
+            
+            OnScoreChanged?.Invoke(currentScore);
         }
 
         /// <summary>
-        /// Вызывается когда игрок проигрывает
+        /// Перейти на следующий круг ада
         /// </summary>
-        public void TriggerGameOver()
+        public void NextCircle()
         {
-            if (currentState != GameState.Gameplay)
-                return;
-            
-            Debug.Log("GAME OVER!");
-            
-            // Сохраняем рекорд (реализуем позже)
-            // SettingsManager.Instance.SaveHighScore(currentScore);
-            
-            // Загружаем сцену GameOver
-            SceneLoader.Instance.LoadScene(5); // GameOver = индекс 5
-        }
-
-        // ============================================
-        // NAVIGATION (для удобства)
-        // ============================================
-        
-        public void LoadMainMenu()
-        {
-            ResetGameplayData();
-            SceneLoader.Instance.LoadScene(1); // MainMenu
-        }
-
-        public void LoadGameplay()
-        {
-            ResetGameplayData();
-            SceneLoader.Instance.LoadScene(3); // Gameplay
-        }
-
-        public void LoadSettings()
-        {
-            SceneLoader.Instance.LoadScene(2); // Settings
-        }
-
-        public void RestartGameplay()
-        {
-            ResetGameplayData();
-            SceneLoader.Instance.LoadScene(3);
-        }
-
-        public void QuitGame()
-        {
-            SceneLoader.Instance.QuitGame();
+            currentCircle++;
+            Debug.Log($"[GameManager] Entering circle {currentCircle} of Hell");
         }
     }
 }
